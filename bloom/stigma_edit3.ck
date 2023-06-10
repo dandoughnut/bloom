@@ -1,95 +1,59 @@
-/////// osc
-SinOsc osc => ADSR env => dac;
-env => NRev reverb => dac;
-0.25 => osc.gain;
-(1::ms, 100::ms, 0, 1::ms) => env.set;
-0.1 => reverb.mix;
-
+//OSC
+OscOut oscOut;
 "224.0.0.1" => string hostname;
 6449 => int port;
-OscIn oscIn;
-port => oscIn.port;
-OscMsg oscMsg;
-oscIn.addAddress("/oscCom");
+oscOut.dest(hostname, port);
 
-// overall mode number based on how many times the button has been pushed
-0 => int mode;
+//movement and mode
 1 => int movement;
+0 => int mode;
+-1 => int prevMode;
 60 => int noteOSC;
--1 => int prevNoteOSC;
+
+//values
 float leftHeight; float leftX; float leftY;
 float rightHeight; float rightX; float rightY;
+
+// differences
 float leftDifVert; float rightDifVert;
 float leftDif; float rightDif;
 
-time lastPressed; // controlled by Stigma
+// lastPressed for button control
+time lastPressed;
 
-
-// turnoff switches
-int switch1, switch2, switch3;
-true => switch1 => switch2 => switch3;
-
-
-// instruments
-string instrument[7];
-"boyschoir.wav" => instrument[0];
-"cello.wav" => instrument[1];
-"cinema.wav" => instrument[2];
-"horn.wav" => instrument[3];
-"japanflute.wav" => instrument[4];
-"mixchoir.wav" => instrument[5];
-"naflute.wav" => instrument[6];
-
-
-
-//////////EVERYTHING NON-MUSIC//////////////////////
-fun void oscRcv()
-{
-    while (true)
-    {
-        <<< "waiting for an OSC message..." >>>;
-        oscIn => now;
-        while (oscIn.recv(oscMsg) != 0)
-        {
-            oscMsg.getInt(0) => movement;
-            oscMsg.getInt(1) => mode;
-            oscMsg.getInt(2) => noteOSC;
-            <<< "movement and mode", movement, mode >>>;
-            100::ms => now;
-        }
-    }
-}
-
-
-// Keyboard
-KBHit kb;
+//DeadZone
 // z axis deadzone
 0 => float DEADZONE;
 // which joystick
 0 => int device;
+// how many times did we press the button
+0 => int buttonPress;
+
+
+// gametrack
+GameTrak gt;
+
+// Classes
+Solo solo1;
+
+Ambience ab1;
+Ambience ab2;
+Ambience ab3;
+Rain rn;
+Wind wn;
+Thunder t;
+
+Finale fin;
+Finale fin2;
+
+
 // get from command line
 if( me.args() ) me.arg(0) => Std.atoi => device;
-// HID objects
+
+// HID objects & input objects
 Hid trak;
 HidMsg msg;
-
-// open joystick 0, exit on fail
-if( !trak.openJoystick( device ) ) me.exit();
-// print
-<<< "joystick '" + trak.name() + "' ready", "" >>>;
-
-// data structure for gametrak
-class GameTrak
-{
-    // timestamps
-    time lastTime;
-    time currTime;
-    // previous axis data
-    float lastAxis[6];
-    // current axis data
-    float axis[6];
-}
-
+KBHit kb;
 
 fun void keyboardctrl()
 {
@@ -115,7 +79,12 @@ fun void keyboardctrl()
             }
             else if (c == 97) mode--;
             else if (c == 100) mode++;
-            
+            //spacebar 
+            else if (c == 32)
+            {
+                spork ~ t.thunders(3);
+                2::second => now;
+            } 
             // print int value
             <<< "ascii:", c >>>;
             <<< "movement", movement, "mode", mode >>>;
@@ -124,49 +93,83 @@ fun void keyboardctrl()
     }
 }
 
-// gametrack
-GameTrak gt;
-Ambience ab;
-Ambience ab2;
-Ambience ab3;
+// open joystick 0, exit on fail
+if( !trak.openJoystick( device ) ) me.exit();
+// print
+<<< "joystick '" + trak.name() + "' ready", "" >>>;
 
-Arpeggiator arp;
+// data structure for gametrak
+class GameTrak
+{
+    // timestamps
+    time lastTime;
+    time currTime;
 
-Rain rn;
-Wind wn;
-Xylo xy;
-Finale fin;
+    // previous axis data
+    float lastAxis[6];
+    // current axis data
+    float axis[6];
+}
 
-// gametrak control
+
+
+// spork control
 spork ~ gametrak();
-//osc
-spork ~ oscRcv();
-// keyboard control
+spork ~ oscSend();
 spork ~ keyboardctrl();
+// music
+spork ~ solo1.vocalise(solo1.notes1, solo1.cands1, 1, 0.63);
 
-//music
-spork ~ ab.ambience(ab.cands1, 1);
-spork ~ ab2.ambience(ab.cands2, 2);
-spork ~ ab3.ambience(ab.cands3, 3);
+// spork ~ ab1.ambience(ab1.cands1, 1);
+spork ~ ab2.ambience(ab2.cands2, 2);
+spork ~ ab3.ambience(ab3.cands3, 3);
 
-spork ~ arp.arpeggiate(arp.notes1, arp.bassNotes1, 2);
-
-spork ~ xy.starlight(3);
 spork ~ wn.windblows(3);
 spork ~ rn.ctrlRain(3);
-spork ~ fin.finale();
+
+
+//osc
 
 
 // main loop
 while( true )
 {
-    <<< leftHeight, rightHeight, leftDif, rightDif >>>;
     gt.axis[5] => rightHeight;
     gt.axis[2] => leftHeight;
     Math.sqrt(Math.pow((gt.axis[0]-gt.lastAxis[0]), 2) + Math.pow((gt.axis[1]-gt.lastAxis[1]), 2)) => leftDif;
-    Math.sqrt(Math.pow((gt.axis[3]-gt.lastAxis[3]), 2) + Math.pow((gt.axis[4]-gt.lastAxis[4]), 2)) => rightDif;
     Math.sqrt(Math.pow((gt.axis[5]-gt.lastAxis[5]), 2)) => rightDifVert;
+    // advance time
     100::ms => now;
+}
+
+fun void oscSend()
+{
+    while(true)
+    {
+        oscOut.start("/oscCom");
+        movement => oscOut.add;
+        mode => oscOut.add;
+        noteOSC => oscOut.add;
+        oscOut.send();
+        200::ms => now;
+    }
+}
+
+fun void muteGain(Gain g, int n)
+{
+    adjustGain(g, 0, n);
+}
+
+fun void adjustGain(Gain g, float target, int n)
+{
+    g.gain() => float curGain;
+    (target - curGain) / n => float add;
+    repeat(n)
+    {
+        add +=> curGain;
+        curGain => g.gain;
+        5::ms => now;
+    }
 }
 
 // gametrack handling
@@ -205,6 +208,8 @@ fun void gametrak()
                     }
                 }
             }
+
+            // joystick button down
             else if( msg.isButtonDown() )
             {
                 // delete potentially
@@ -222,6 +227,70 @@ fun void gametrak()
                 }
                 now => lastPressed;
             }
+            // joystick button up
+            else if( msg.isButtonUp() )
+            {
+                <<< "button", msg.which, "up" >>>;
+            }
+        }
+    }
+}
+
+class Solo
+{
+    SndBuf choir[4] => ADSR soloEnv => NRev nrev0 => Gain choirgain => dac;
+    me.dir() + "choird.wav" => choir[0].read;
+    soloEnv.set( 30::ms, 100::ms, .5, 30::ms );
+    1 => choir[0].loop;
+    0 => choir[0].pos;
+    1 => choir[0].rate;
+    [0, 7, 4, 5, 7, 2,  0, 7, 4, 5, 7, 8,   0, 7, 4, 5, 7, 2,  0, 7, 4, 5, 7, 8,  7, 0,   7, 0,   4, 0,   2, 0, 4] @=> int notes1[];
+    [0, 2, 4, 5, 7, 8] @=> int cands1[];
+    
+    -1 => int prevpos;
+    0 => int curNote;
+    // 0 , 2,    4,  5,   7 ,  8
+    // 0.1, 0.2, 0.3 0.4, 0.5, 0.6
+    fun void vocalise(int notes[], int cands[], int movementCondition, float maxThreshold)
+    {
+        while(true)
+        {
+            if (movement != movementCondition)
+            {
+                if (choirgain.gain() > 0.05) muteGain(choirgain, 50);
+            }
+            else
+            {
+                // Height determines current position
+                Math.min(cands.size() - 1, (leftHeight / maxThreshold * cands.size())) $ int => int curpos;
+                if (leftHeight < 0.05)
+                {
+                    muteGain(choirgain, 50);
+                }
+                // if rightHeight isn't too low, turn up the volume
+                else if (choirgain.gain() < 0.01) adjustGain(choirgain, 1.0, 20);
+                
+                else
+                {
+                    // based on the current position, 
+                    if (curpos != prevpos)
+                    {
+                        // change note if the keys are fulfilled
+                        if (curNote+1 < notes.size() && cands[curpos] == notes[curNote+1])
+                        {
+                            soloEnv.keyOff();
+                            soloEnv.releaseTime() => now;
+                            Math.pow(2, (cands[curpos]/12.0)) + 0.02 => choir[0].rate;
+                            100 => choir[0].pos;
+                            curpos => prevpos;
+                            curNote++;
+                        }
+                        soloEnv.keyOn();
+                    }                
+                }
+            }
+            // pass time
+            0.03::second => now;
         }
     }
 }
@@ -259,7 +328,7 @@ class Ambience
                 
                 else
                 {
-                    Math.max(0, (rightHeight - 0.1) * 5)  => ambGain.gain;
+                    Math.max(0, (rightHeight - 0.1) * 2)  => ambGain.gain;
                     if (prevMode != mode)
                     {
                         Math.pow(2, cands[mode % cands.size()]/12.0) => float bass;
@@ -276,115 +345,28 @@ class Ambience
     }
 }
 
-class Arpeggiator
+
+class Thunder
 {
-    // channel 0
-    SinOsc lfo0 => TriOsc petal0 => ADSR e => Gain arpGain => NRev arpRev => ResonZ resonz0 => dac;
-    // set ADSR
-    e.set( 50::ms, 50::ms, .9, 500::ms );
-    3 => lfo0.freq;
-    2 => petal0.sync;
-    0.1 => arpRev.mix;
-    1.0 => arpRev.gain;
-    40 => resonz0.freq;
-    [0, 4, 7, 11, 12] @=> int notes1[];
-    [62, 69, 66, 67, 69, 62, 62] @=> int bassNotes1[];
-    -1 => int prevNote;
-    -1 => int curNote;
-    fun void arpeggiate(int notes[], int bassNotes[], int movementCondition)
+    SndBuf thunder => Gain thundergain => NRev thunderrev => dac;
+    me.dir() + "thunder.wav" => thunder.read;
+    1 => thunder.rate;
+    0.1 => thunderrev.mix;
+    0 => thundergain.gain;
+    1 => int thunderYet;
+    fun void thunders(int movementCondition)
     {
-        0 => int curr;
-        while (true)
+        if (movement == movementCondition) 
         {
-           mode => int curMode;
-           if (movementCondition != movement)
-           {
-                if (arpGain.gain() > 0.05)
-                {
-                    muteGain(arpGain, 50);
-                }
-           }
-           else // correct movement
-           {
-               if (leftHeight < 0.1)
-               {
-                    muteGain(arpGain, 50);
-               }
-               else if (arpGain.gain() < 0.05)
-                   {
-                       adjustGain(arpGain, 1, 50);
-                   }
-               else
-               {
-                    Math.min(notes.size() - 1, Math.floor((leftHeight - 0.1) / 0.5 * (notes.size() - 1))) $ int => int arpNote;
-                    bassNotes[mode % bassNotes.size()] + notes[ arpNote ] => curNote;
-                
-                   if (curNote != prevNote)
-                   {
-                        e.keyOff();
-                        e.releaseTime();
-                        Std.mtof(curNote) => petal0.freq;
-                        e.keyOn();
-                        curNote => prevNote;
-                   } 
-               }
-           }
-           
-           0.1::second => now;
+            1 => thundergain.gain;
+            0 => thunder.pos;
+            0 => thunderYet;
+            2::second => now;
+            0.1::second => now;
         }
     }
 }
 
-class Xylo
-{
-    ModalBar bar => Gain xylogain => NRev xylorev => ResonZ xylorez => dac;
-    0.1 => xylorev.mix;
-    1 => bar.gain;
-    2 => xylorev.gain;
-    // scale
-    [0, 4, 7, 11] @=> int scale[];
-    fun void starlight(int movementCondition)
-    {
-        // infinite time loop
-        while( true )
-        {
-            if (movementCondition != movement)
-            {
-                muteGain(xylogain, 50);
-            }
-            else
-            {
-                if (rightHeight > 0.6 && leftHeight > 0.6)
-                {
-                    if (xylogain.gain() < 0.1)
-                    {
-                        spork ~ adjustGain(xylogain, 6, 3000);
-                    }
-                    <<< "starlight" >>>;
-                    // ding!
-                    4 => bar.preset;
-                    Math.random2f( 0.5, 0.6 ) => bar.stickHardness;
-                    Math.random2f( 0.5, 0.7 ) => bar.strikePosition;
-                    Math.random2f( 0.01, 0.1 ) => bar.vibratoGain;
-                    0.01 => bar.vibratoFreq;
-                    Math.random2f( 0.7, 0.9 ) => bar.volume;
-                    Math.random2f( .8, 1 ) => bar.directGain;
-                    Math.random2f( .7, .95 ) => bar.masterGain;
-                    // set freq
-                    scale[Math.random2(0,scale.size()-1)] => int winner;
-                    74 + Math.random2(0,1)*12 + winner => Std.mtof => bar.freq;
-                    // go
-                    if (Math.random2f(0, 1.0) < 0.7)
-                    {
-                        .85 => bar.noteOn;
-                    }
-                }
-            }
-            // advance time
-            .33::second => now;
-        }
-    }
-}
 
 class Wind
 {
@@ -482,8 +464,8 @@ class Rain
                 else
                 {
                     raingain.gain() => float curRainGain;
-                    curRainGain * 0.33 + (rightHeight - 0.1) * 2 * 0.67 => float newGain;
-                    adjustGain(raingain, newGain, 250); 
+                    curRainGain * 0.33 + (rightHeight - 0.1) * 1.5 * 0.67 => float newGain;
+                    adjustGain(raingain, newGain, 150); 
                 }
             }
             0.02::second => now;
@@ -491,23 +473,26 @@ class Rain
     }
 }
 
+
 class Finale
 {
-    SndBuf inst => ADSR finAdsr => NRev finRev => ResonZ finRes => Gain instGain => Gain finGain => dac;
-    finAdsr.set(100::ms, 100::ms, 0.99, 100::ms);
+    SndBuf inst => ADSR finAdsr => NRev finRev => ResonZ finRes => Gain finGain => dac;
+    // SndBuf inst => NRev finRev => ResonZ finRes => Gain finGain => dac;
+    finAdsr.set(10::ms, 100::ms, 0.99, 50::ms);
     0.1 => finRev.mix;
     0 => finGain.gain;
+    1 => inst.loop;
 
     // controlling current mode;
     -1 => int prevFinNote;
+    0 => int introduced;
 
     // set which instrument (this is set)
-    Math.random2(0, 6) => int which;
-    me.dir() + instrument[which] => inst.read;
-
+    me.dir() + "choird.wav" => inst.read;
+    
     // set when to introduce
-    Math.random2(7, 10) => int when;
-
+    Math.random2(7, 10) => int introTime;
+    Math.random2f(0.5, 3.5) => float delayTime;
 
     // [0, 7, 4, 5, 7, 2, 0, 7, 4, 5, 7, 12, 12, 12, 12, 12, 12] @=> int cands3[];
     // //[ 1, 2, 3, 4, 5]  [7, 8, 9, 10]   [12, 13, 14, 15, 16]
@@ -517,20 +502,63 @@ class Finale
         {
             if (movement == 3)
             {
-                if (leftHeight < 0.6 && rightHeight < 0.6)
+                if (leftHeight < 0.5 && rightHeight < 0.5)
                 {
-                    if (finGain.gain() > 0.05) muteGain(finGain, 50);
+                    if (finGain.gain() > 0.05) muteGain(finGain, 500);
                 }
-                else if (mode == 6)
+                else 
                 {
-                    if (finGain.gain() < 0.1) adjustGain(finGain, 1, 50);
+                    if (mode >= 6)
+                    {
+                        if (finGain.gain() < 0.05) adjustGain(finGain, 10, 50);
+                        else if (mode == 7 && introduced ==0)
+                        {
+                            play(0);
+                            1.5::second => now;
+                            finAdsr.keyOff(); 
+                            1 => introduced;
+                        }
+                        
+                        else if (mode == 12) play(0);
+                        else if (mode == 13) play(7);
+                        else if (mode == 14) play(4);
+                        else if (mode == 15) play(5);
+                        else if (mode == 16) play(7);
+                    }  
+                    
                 }
-                else if (mode == 12) play(0);
-                else if (mode == 13) play(7);
-                else if (mode == 14) play(4);
-                else if (mode == 15) play(5);
-                else if (mode == 16) play(7);
                 
+            }
+            else
+            {
+                if (finGain.gain() > 0.05) muteGain(finGain, 50);
+            }
+            0.05::second => now;
+        }
+    }
+
+    fun void lastNote()
+    {
+        while (true)
+        {
+            if (movement == 3)
+            {
+                if (leftHeight < 0.5 && rightHeight < 0.5)
+                {
+                    if (finGain.gain() > 0.05) muteGain(finGain, 500);
+                }
+                else 
+                {
+                    if (mode == 16)
+                    {
+                        if (finGain.gain() < 0.05) adjustGain(finGain, 8, 1);
+                        play(0);
+                    }  
+                }
+            }
+            else
+            {
+                if (finGain.gain() > 0.05) muteGain(finGain, 50);
             }
             0.05::second => now;
         }
@@ -543,31 +571,11 @@ class Finale
             finAdsr.keyOff();
             Math.pow(2, bassNote/12.0) => float bass;
             bass => inst.rate;
+            bassNote => prevFinNote;
             finAdsr.releaseTime();
+            0 => inst.pos;
         }
         finAdsr.keyOn();
     }
-
 }
 
-
-
-
-
-//gain adjust helpers
-fun void muteGain(Gain g, int n)
-{
-    adjustGain(g, 0, n);
-}
-
-fun void adjustGain(Gain g, float target, int n)
-{
-    g.gain() => float curGain;
-    (target - curGain) / n => float add;
-    repeat(n)
-    {
-        add +=> curGain;
-        curGain => g.gain;
-        5::ms => now;
-    }
-}

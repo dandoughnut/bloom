@@ -21,14 +21,10 @@ float leftHeight; float leftX; float leftY;
 float rightHeight; float rightX; float rightY;
 float leftDifVert; float rightDifVert;
 float leftDif; float rightDif;
-
 time lastPressed; // controlled by Stigma
 
-
-// turnoff switches
-int switch1, switch2, switch3;
-true => switch1 => switch2 => switch3;
-
+//final instrument
+Math.random2(0, 6) => int which;
 
 // instruments
 string instrument[7];
@@ -136,6 +132,7 @@ Rain rn;
 Wind wn;
 Xylo xy;
 Finale fin;
+Finale fin2;
 
 // gametrak control
 spork ~ gametrak();
@@ -155,6 +152,7 @@ spork ~ xy.starlight(3);
 spork ~ wn.windblows(3);
 spork ~ rn.ctrlRain(3);
 spork ~ fin.finale();
+spork ~ fin2.lastNote();
 
 
 // main loop
@@ -483,7 +481,7 @@ class Rain
                 {
                     raingain.gain() => float curRainGain;
                     curRainGain * 0.33 + (rightHeight - 0.1) * 2 * 0.67 => float newGain;
-                    adjustGain(raingain, newGain, 250); 
+                    adjustGain(raingain, newGain, 150); 
                 }
             }
             0.02::second => now;
@@ -493,21 +491,23 @@ class Rain
 
 class Finale
 {
-    SndBuf inst => ADSR finAdsr => NRev finRev => ResonZ finRes => Gain instGain => Gain finGain => dac;
-    finAdsr.set(100::ms, 100::ms, 0.99, 100::ms);
+    SndBuf inst => ADSR finAdsr => NRev finRev => ResonZ finRes => Gain finGain => dac;
+    // SndBuf inst => NRev finRev => ResonZ finRes => Gain finGain => dac;
+    finAdsr.set(10::ms, 100::ms, 0.99, 50::ms);
     0.1 => finRev.mix;
     0 => finGain.gain;
+    1 => inst.loop;
 
     // controlling current mode;
     -1 => int prevFinNote;
+    0 => int introduced;
 
     // set which instrument (this is set)
-    Math.random2(0, 6) => int which;
     me.dir() + instrument[which] => inst.read;
-
+    
     // set when to introduce
-    Math.random2(7, 10) => int when;
-
+    Math.random2(7, 10) => int introTime;
+    Math.random2f(0.5, 3.5) => float delayTime;
 
     // [0, 7, 4, 5, 7, 2, 0, 7, 4, 5, 7, 12, 12, 12, 12, 12, 12] @=> int cands3[];
     // //[ 1, 2, 3, 4, 5]  [7, 8, 9, 10]   [12, 13, 14, 15, 16]
@@ -517,20 +517,64 @@ class Finale
         {
             if (movement == 3)
             {
-                if (leftHeight < 0.6 && rightHeight < 0.6)
+                if (leftHeight < 0.5 && rightHeight < 0.5)
                 {
-                    if (finGain.gain() > 0.05) muteGain(finGain, 50);
+                    if (finGain.gain() > 0.05) muteGain(finGain, 500);
                 }
-                else if (mode == 6)
+                else 
                 {
-                    if (finGain.gain() < 0.1) adjustGain(finGain, 1, 50);
+                    if (mode >= 6)
+                    {
+                        if (finGain.gain() < 0.05) adjustGain(finGain, 10, 50);
+                        else if (mode == introTime && introduced ==0)
+                        {
+                            delayTime::second => now;
+                            play(0);
+                            1.5::second => now;
+                            finAdsr.keyOff(); 
+                            1 => introduced;
+                        }
+                        
+                        else if (mode == 12) play(0);
+                        else if (mode == 13) play(7);
+                        else if (mode == 14) play(4);
+                        else if (mode == 15) play(5);
+                        else if (mode == 16) play(7);
+                    }  
+                    
                 }
-                else if (mode == 12) play(0);
-                else if (mode == 13) play(7);
-                else if (mode == 14) play(4);
-                else if (mode == 15) play(5);
-                else if (mode == 16) play(7);
                 
+            }
+            else
+            {
+                if (finGain.gain() > 0.05) muteGain(finGain, 50);
+            }
+            0.05::second => now;
+        }
+    }
+
+    fun void lastNote()
+    {
+        while (true)
+        {
+            if (movement == 3)
+            {
+                if (leftHeight < 0.5 && rightHeight < 0.5)
+                {
+                    if (finGain.gain() > 0.05) muteGain(finGain, 500);
+                }
+                else 
+                {
+                    if (mode == 16)
+                    {
+                        if (finGain.gain() < 0.05) adjustGain(finGain, 8, 1);
+                        play(0);
+                    }  
+                }
+            }
+            else
+            {
+                if (finGain.gain() > 0.05) muteGain(finGain, 50);
             }
             0.05::second => now;
         }
@@ -543,14 +587,14 @@ class Finale
             finAdsr.keyOff();
             Math.pow(2, bassNote/12.0) => float bass;
             bass => inst.rate;
+            bassNote => prevFinNote;
             finAdsr.releaseTime();
+            0 => inst.pos;
         }
         finAdsr.keyOn();
     }
 
 }
-
-
 
 
 
