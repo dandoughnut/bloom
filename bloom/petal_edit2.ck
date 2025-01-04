@@ -154,7 +154,7 @@ spork ~ arp.arpeggiate(arp.notes1, arp.bassNotes1, 2);
 spork ~ xy.starlight(3);
 spork ~ wn.windblows(3);
 spork ~ rn.ctrlRain(3);
-spork ~ fin.finale();
+//spork ~ fin.finale();
 
 
 // main loop

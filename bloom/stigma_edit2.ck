@@ -117,18 +117,18 @@ spork ~ gametrak();
 spork ~ oscSend();
 spork ~ solo1.vocalise(solo1.notes1, solo1.cands1, 1, 0.63);
 
-spork ~ ab1.ambience(ab1.cands1, 1);
-spork ~ ab2.ambience(ab2.cands2, 2);
-spork ~ ab3.ambience(ab3.cands3, 3);
+// spork ~ ab1.ambience(ab1.cands1, 1);
+// spork ~ ab2.ambience(ab2.cands2, 2);
+// spork ~ ab3.ambience(ab3.cands3, 3);
 
 
 spork ~ wn.windblows(3);
 spork ~ rn.ctrlRain(3);
 
-spork ~ t.thunders(3);
+// spork ~ t.thunders(3);
 spork ~ xy.starlight(3);
-spork ~ fin.finale();
-spork ~ fin2.lastNote();
+// spork ~ fin.finale();
+// spork ~ fin2.lastNote();
 
 //osc
 

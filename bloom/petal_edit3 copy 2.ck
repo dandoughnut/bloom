@@ -499,71 +499,7 @@ class Finale
     Math.random2f(0.5, 3.5) => float delayTime;
     fun void finale()
     {
-        while (true)
-        {
-            if (movement == 3)
-            {
-                if (leftHeight < 0.5 && rightHeight < 0.5)
-                {
-                    if (finGain.gain() > 0.05) muteGain(finGain, 500);
-                }
-                else 
-                {
-                    if (mode >= 6)
-                    {
-                        if (finGain.gain() < 0.05) adjustGain(finGain, 10, 50);
-                        else if (mode == introTime && introduced ==0)
-                        {
-                            delayTime::second => now;
-                            play(0);
-                            1.5::second => now;
-                            finAdsr.keyOff(); 
-                            1 => introduced;
-                        }
-                        
-                        else if (mode == 12) play(0);
-                        else if (mode == 13) play(7);
-                        else if (mode == 14) play(4);
-                        else if (mode == 15) play(5);
-                        else if (mode == 16) play(7);
-                    }  
-                    
-                }
-                
-            }
-            else
-            {
-                if (finGain.gain() > 0.05) muteGain(finGain, 50);
-            }
-            0.05::second => now;
-        }
-    }
-
-    fun void lastNote()
-    {
-        while (true)
-        {
-            if (movement == 3)
-            {
-                if (leftHeight < 0.5 && rightHeight < 0.5)
-                {
-                    if (finGain.gain() > 0.05) muteGain(finGain, 500);
-                }
-                else 
-                {
-                    if (mode == 16)
-                    {
-                        if (finGain.gain() < 0.05) adjustGain(finGain, 8, 1);
-                        play(0);
-                    }  
-                }
-            }
-            else
-            {
-                if (finGain.gain() > 0.05) muteGain(finGain, 50);
-            }
-            0.05::second => now;
-        }
+        while (true) play();
     }
 
     fun void play(int bassNote)
@@ -575,28 +511,92 @@ class Finale
             bass => inst.rate;
             bassNote => prevFinNote;
             finAdsr.releaseTime();
-            0 => inst.pos;
+            0 => inst.pos;}
+            finAdsr.keyOn();
         }
-        finAdsr.keyOn();
     }
 }
+
+if (movement == 3)
+{
+if (leftHeight < 0.5 && rightHeight < 0.5)
+{
+if (finGain.gain() > 0.05) muteGain(finGain, 500);
+}
+else 
+{
+if (mode >= 6)
+{
+if (finGain.gain() < 0.05) adjustGain(finGain, 10, 50);
+else if (mode == introTime && introduced ==0)
+{
+delayTime::second => now;
+play(0);
+1.5::second => now;
+finAdsr.keyOff(); 
+1 => introduced;
+}
+else if (mode == 12) play(0);
+else if (mode == 13) play(7);
+else if (mode == 14) play(4);
+else if (mode == 15) play(5);
+else if (mode == 16) play(7);
+}  
+}
+
+}
+else
+{
+if (finGain.gain() > 0.05) muteGain(finGain, 50);
+}
+0.05::second => now;
+}
+}
+
+fun void lastNote()
+{
+while (true)
+{
+if (movement == 3)
+{
+if (leftHeight < 0.5 && rightHeight < 0.5)
+{
+if (finGain.gain() > 0.05) muteGain(finGain, 500);
+}
+else 
+{
+if (mode == 16)
+{
+if (finGain.gain() < 0.05) adjustGain(finGain, 8, 1);
+play(0);
+}  
+}
+}
+else
+{
+if (finGain.gain() > 0.05) muteGain(finGain, 50);
+}
+0.05::second => now;
+}
+}
+
 
 
 
 //gain adjust helpers
 fun void muteGain(Gain g, int n)
 {
-    adjustGain(g, 0, n);
+adjustGain(g, 0, n);
 }
 
 fun void adjustGain(Gain g, float target, int n)
 {
-    g.gain() => float curGain;
-    (target - curGain) / n => float add;
-    repeat(n)
-    {
-        add +=> curGain;
-        curGain => g.gain;
-        5::ms => now;
-    }
+g.gain() => float curGain;
+(target - curGain) / n => float add;
+repeat(n)
+{
+add +=> curGain;
+curGain => g.gain;
+5::ms => now;
+}
 }
